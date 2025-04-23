@@ -1,0 +1,7 @@
+{
+    "packageFolder": "./package",
+    "propertiesFile": "./data/knowledge.properties",
+    "restApiVersion": "63.0",
+    "recordTypeMapping": {
+    }
+  }
