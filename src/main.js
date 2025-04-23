@@ -7,6 +7,7 @@ const colors = require("ansi-colors");
 
 const parseCli = require("./cli");
 const config = require("./config");
+const ArticlePackager = require("./services/ArticlePackager");
 const SalesforceClient = require("./services/SalesforceClient");
 const CsvStorage = require("./services/CsvStorage");
 const ImageDownloader = require("./services/ImageDownloader");
@@ -50,10 +51,12 @@ const ProgressBars = require("./services/ProgressBars");
     process.exit(1);
   }
   fs.rmSync(config.packageFolder, { recursive: true, force: true });
-  const imgDir = path.join(config.packageFolder, "img");
-  const htmlDir = path.join(config.packageFolder, "html");
-  fs.mkdirSync(imgDir, { recursive: true });
-  fs.mkdirSync(htmlDir, { recursive: true });
+  const packager = new ArticlePackager({
+    baseOutputDir: args.output,
+    restApiVersion: config.restApiVersion,
+    propertiesFile: config.propertiesFile,
+    maxSizeMb: args.maxSizeMb,
+  });
 
   // 5 · Process CSV rows (HTML + images)
   const rows = await CsvStorage.read({
@@ -68,12 +71,6 @@ const ProgressBars = require("./services/ProgressBars");
     progress: bars.download,
     restApiVersion: config.restApiVersion,
   });
-  const htmlXf = new HtmlTransformer({
-    imgDownloader: imgDl,
-    htmlDir,
-    imgDir,
-    downloadBar: bars.download,
-  });
 
   const richFields = fields.filter(
     (f) =>
@@ -82,31 +79,30 @@ const ProgressBars = require("./services/ProgressBars");
   );
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
+
+    const { imgDir, htmlDir } = packager.currentFolders();
+    const htmlXf = new HtmlTransformer({
+      imgDownloader: imgDl,
+      htmlDir,
+      imgDir,
+      downloadBar: bars.download,
+    });
+
     if (row.RecordTypeId && config.recordTypeMapping[row.RecordTypeId]) {
       row.RecordTypeId = config.recordTypeMapping[row.RecordTypeId];
     }
 
+    const generatedFiles = []; // track all files generated for this row
     for (const f of richFields) {
-      await htmlXf.transform(row, f.name, i + args.offset);
+      const files =
+        (await htmlXf.transform(row, f.name, i + args.offset)) || [];
+      generatedFiles.push(...files); // HtmlTransformer should now return array of paths
     }
+    packager.add(row, generatedFiles);
     bars.rows.increment();
   }
+  packager.flush();
   bars.stop();
-
-  // 6 · Write processed CSV to package
-  CsvStorage.write(
-    path.join(config.packageFolder, path.basename(args.input)),
-    rows,
-  );
-  CsvStorage.duplicateToPackage(config.propertiesFile, config.packageFolder);
-
-  // 7 · Zip
-  spinner = ora("Packaging files...").start();
-  const res = await ZipArchiver.zipDir({
-    srcDir: config.packageFolder,
-    destDir: args.output,
-  });
-  spinner.succeed(`ZIP created → ${res.outPath} (${res.size} bytes)`);
 
   const secs = ((Date.now() - t0) / 1000).toFixed(1);
   console.log(colors.greenBright(`🏁  Finished in ${secs}s`));

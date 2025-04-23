@@ -20,6 +20,8 @@ class HtmlTransformer {
     this.downloadBar.setTotal(imgs.length);
     this.downloadBar.update(0);
 
+    const downloadedFilePaths = [];
+
     for (const el of imgs) {
       const imgUrl = $(el).attr("src");
       if (!imgUrl) continue;
@@ -36,13 +38,17 @@ class HtmlTransformer {
         imgDir: this.imgDir,
       });
 
-      if (localPath) $(el).attr("src", path.relative(this.htmlDir, localPath));
+      if (localPath) {
+        $(el).attr("src", path.relative(this.htmlDir, localPath));
+        downloadedFilePaths.push(localPath);
+      }
     }
 
     const htmlFile = `kb_${rowIdx}_${fieldName}.html`;
     const htmlPath = path.join(this.htmlDir, htmlFile);
     fs.writeFileSync(htmlPath, $.html({ decodeEntities: false }));
     row[fieldName] = path.join("html", htmlFile);
+    return [htmlPath, ...downloadedFilePaths];
   }
 }
 

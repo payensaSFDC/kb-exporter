@@ -1,6 +1,6 @@
 # Salesforce Knowledge‑Base Exporter (Experimental)
 
-> **Status : experimental – breaking changes may occur at any time.**
+> **Status : experimental 🚀 – breaking changes may occur at any time.**
 
 A CLI tool that bulk‑exports Salesforce **Knowledge** articles, rewrites embedded HTML so that images point to local files, and bundles everything into a ready‑to‑import ZIP package.
 
@@ -28,11 +28,12 @@ The codebase is a practical demonstration of the **SOLID principles** in Node.js
 - Discovers Knowledge objects automatically (both Classic & Lightning).
 - Streams articles (> 10 k rows supported) and writes them to CSV.
 - Downloads every rich‑text image and rewrites HTML accordingly.
-- Generates a ZIP containing:
+- Generates as many archives as necessary, each ≤ --max-size-mb MiB (default 10). No article appears in more than one ZIP.
+- Every `package_<n>.zip` contains:
   - `/img` – all binary assets.
   - `/html` – transformed article bodies.
   - `articles.csv` – the updated CSV ready for re‑import.
-  - `package-properties.xml` – custom metadata (copied from your repo).
+  - `knowledge.properties` – properties file.
 - Progress bars, colored logging, and spinner feedback.
 - Clean, testable design: each service has a single responsibility.
 
@@ -84,13 +85,14 @@ node src/main.js \
   --input    "articles.csv"             \
   --output   "./dist"                  \
   --loginUrl "https://test.salesforce.com"
+  --max-size-mb 10 # optional (default 10)
 ```
 
 The script will:
 
 1. Query all Knowledge articles, writing them to `articles.csv`.
 2. Process the CSV, downloading images to `dist/package/img` and rewriting HTML.
-3. Zip the `package` folder into `dist/package.zip`.
+3. Split results into package_1.zip, package_2.zip, … inside ./dist/, each ≤ 10 MiB.
 
 ## Configuration
 
@@ -109,7 +111,8 @@ The script will:
 2. **Discover** – queries `describeGlobal` to find the `__kav` object.
 3. **Bulk Fetch** – streams records and writes raw CSV.
 4. **Transform** – `HtmlTransformer` loads each rich‑text field with **cheerio**, delegates image download to `ImageDownloader`, rewrites `<img src>` paths, and persists HTML to `/html`.
-5. **Package** – `ZipArchiver` zips the workspace; progress bars render throughout.
+5. **Package** – `ArticlePackager` groups rows and assets until the next file would exceed the cap, then flushes a ZIP via ZipArchiver.
+5. **Repeat** – steps 4‑5 continue until all rows processed.
 
 ## Contributing
 
@@ -120,8 +123,9 @@ Issues and feature requests can be opened in the tracker.
 
 ```bash
 # Lint & test
-npm run lint
+npm run lint:fix
 npm test
+npm run format
 ```
 
 ## References

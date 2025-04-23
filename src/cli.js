@@ -43,5 +43,11 @@ module.exports = () =>
       type: "string",
       default: "https://test.salesforce.com",
     })
+    .option("max-size-mb", {
+      alias: "m",
+      description: "Maximum size per output ZIP (in MiB)",
+      type: "number",
+      default: 10,
+    })
     .help("h")
     .alias("h", "help").argv;
