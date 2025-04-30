@@ -13,11 +13,7 @@ class SalesforceClient {
     try {
       await this.conn.login(this.username, this.password);
     } catch (err) {
-      console.error(
-        colors.redBright("✖  Salesforce login failed →"),
-        err.message,
-      );
-      process.exit(1);
+      throw err;
     }
   }
 

@@ -39,6 +39,7 @@ class ArticlePackager {
   add(row, relatedFilePaths) {
     const rowSize = Buffer.byteLength(JSON.stringify(row)); // header-only estimate
     const fileSize = relatedFilePaths
+      .filter(p => p && fs.existsSync(p))
       .map((f) => fs.statSync(f).size)
       .reduce((a, b) => a + b, 0);
 

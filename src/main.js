@@ -20,28 +20,50 @@ const ProgressBars = require("./services/ProgressBars");
   const args = parseCli();
 
   // 1 · Salesforce login
-  let spinner = ora("Conecting to Salesforce...").start();
-  const sf = new SalesforceClient(args);
-  await sf.login();
-  spinner.succeed("Connected to Salesforce");
+  let spinner = ora("Connecting to Salesforce...").start();
+  const sf = new SalesforceClient(args); 
+  try {
+    await sf.login();
+     spinner.succeed(`${colors.cyanBright("Connected to Salesforce...")}`);
+  } catch (error) {
+    spinner.fail(`${colors.bgRed("Login failed:")} ${error.message}`);
+    process.exit(1);
+  }
 
   // 2 · Detect Knowledge object
-  const { sobjects } = await sf.conn.describeGlobal();
-  const kavObj = sobjects.find((s) => s.name.endsWith("__kav"));
-  if (!kavObj) {
-    console.error(colors.redBright("✖  No Knowledge objects found."));
+  spinner = ora({ text: "Fetching metadata...", color: "cyan" }).start();
+  let kavObj, fields;
+  try {
+    const { sobjects } = await sf.conn.describeGlobal();
+    kavObj = sobjects.find(s => s.name.endsWith('__kav'));
+    if (!kavObj) {
+      throw new Error('No Knowledge objects found in the org');
+    }
+    fields = await sf.listImportableFields(kavObj.name);
+    if (!fields.length) {
+      throw new Error(`No importable fields in ${kavObj.name}`);
+    }
+    spinner.succeed(`Metadata loaded · Object: ${kavObj.name} · ${fields.length} fields`);
+  } catch (error) {
+    spinner.fail(`${colors.bgRed("Metadata lookup failed:")} ${error.message}`);
     process.exit(1);
   }
 
   // 3 · Fetch all KAV rows → CSV
-  const fields = await sf.listImportableFields(kavObj.name);
   const soql = `SELECT ${fields.map((f) => f.name).join(",")} FROM ${kavObj.name} ORDER BY CreatedDate ASC`;
 
-  spinner = ora("Executing query…").start();
-  const { records } = await sf.queryAll(soql);
+  spinner = ora({ text: "Executing query…", color: "cyan" }).start();
+  let records;
 
+  try {
+    ({ records } = await sf.queryAll(soql));
+    spinner.succeed(`${records.length} articles saved to ${args.input}`);
+  } catch (error) {
+    spinner.fail(`${colors.bgRed("Query failed:")} ${error.message}`);
+    process.exit(1);
+  }
   CsvStorage.write(args.input, records);
-  spinner.succeed(`${records.length} articles saved to ${args.input}`);
+  
 
   // 4 · Prepare package structure
   if (path.resolve(config.packageFolder) === path.resolve(args.output)) {

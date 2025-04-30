@@ -40,7 +40,7 @@ class HtmlTransformer {
 
       if (localPath) {
         $(el).attr("src", path.relative(this.htmlDir, localPath));
-        downloadedFilePaths.push(localPath);
+        if (fs.existsSync(localPath)) downloadedFilePaths.push(localPath);
       }
     }
 
